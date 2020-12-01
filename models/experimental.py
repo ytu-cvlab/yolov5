@@ -4,7 +4,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from models.common import Conv, DWConv
+from models.common import Conv, DWConv, Bottleneck
 from utils.google_utils import attempt_download
 
 
@@ -22,23 +22,37 @@ class CrossConv(nn.Module):
         return x + self.cv2(self.cv1(x)) if self.add else self.cv2(self.cv1(x))
 
 
+# class C3(nn.Module):
+#     # Cross Convolution CSP
+#     def __init__(self, c1, c2, n=1, shortcut=True, g=1, e=0.5):  # ch_in, ch_out, number, shortcut, groups, expansion
+#         super(C3, self).__init__()
+#         c_ = int(c2 * e)  # hidden channels
+#         self.cv1 = Conv(c1, c_, 1, 1)
+#         self.cv2 = nn.Conv2d(c1, c_, 1, 1, bias=False)
+#         self.cv3 = nn.Conv2d(c_, c_, 1, 1, bias=False)
+#         self.cv4 = Conv(2 * c_, c2, 1, 1)
+#         self.bn = nn.BatchNorm2d(2 * c_)  # applied to cat(cv2, cv3)
+#         self.act = nn.LeakyReLU(0.1, inplace=True)
+#         self.m = nn.Sequential(*[CrossConv(c_, c_, 3, 1, g, 1.0, shortcut) for _ in range(n)])
+#
+#     def forward(self, x):
+#         y1 = self.cv3(self.m(self.cv1(x)))
+#         y2 = self.cv2(x)
+#         return self.cv4(self.act(self.bn(torch.cat((y1, y2), dim=1))))
+
+
 class C3(nn.Module):
-    # Cross Convolution CSP
+    # CSP Bottleneck with 3 convolutions https://github.com/WongKinYiu/CrossStagePartialNetworks
     def __init__(self, c1, c2, n=1, shortcut=True, g=1, e=0.5):  # ch_in, ch_out, number, shortcut, groups, expansion
         super(C3, self).__init__()
         c_ = int(c2 * e)  # hidden channels
         self.cv1 = Conv(c1, c_, 1, 1)
-        self.cv2 = nn.Conv2d(c1, c_, 1, 1, bias=False)
-        self.cv3 = nn.Conv2d(c_, c_, 1, 1, bias=False)
-        self.cv4 = Conv(2 * c_, c2, 1, 1)
-        self.bn = nn.BatchNorm2d(2 * c_)  # applied to cat(cv2, cv3)
-        self.act = nn.LeakyReLU(0.1, inplace=True)
-        self.m = nn.Sequential(*[CrossConv(c_, c_, 3, 1, g, 1.0, shortcut) for _ in range(n)])
+        self.cv2 = Conv(c_ + c1, 2 * c_, 1, 1, p=None, g=2)
+        self.cv3 = Conv(2 * c_, c2, 1, 1)
+        self.m = nn.Sequential(*[Bottleneck(c_, c_, shortcut, g, e=1.0) for _ in range(n)])
 
     def forward(self, x):
-        y1 = self.cv3(self.m(self.cv1(x)))
-        y2 = self.cv2(x)
-        return self.cv4(self.act(self.bn(torch.cat((y1, y2), dim=1))))
+        return self.cv3(self.cv2(torch.cat((self.m(self.cv1(x)), x), dim=1)))
 
 
 class Sum(nn.Module):
