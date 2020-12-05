@@ -1,4 +1,4 @@
-# This file contains experimental modules
+g1# This file contains experimental modules
 
 import numpy as np
 import torch
@@ -47,7 +47,7 @@ class C3(nn.Module):
         super(C3, self).__init__()
         c_ = int(c2 * e)  # hidden channels
         self.cv1 = Conv(c1, c_, 1, 1)
-        self.cv2 = Conv(c_ + c1, 2 * c_, 1, 1, p=None, g=2)
+        self.cv2 = Conv(c_ + c1, 2 * c_, 1, 1, p=None, g=1)
         self.cv3 = Conv(2 * c_, c2, 1, 1)
         self.m = nn.Sequential(*[Bottleneck(c_, c_, shortcut, g, e=1.0) for _ in range(n)])
 
